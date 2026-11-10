@@ -112,6 +112,17 @@ document.addEventListener('DOMContentLoaded', function() {
     setTimeout(function() { saveBtn.textContent = 'ذخیره و اعمال در مرورگر ✓'; }, 1500);
   });
 
+  // Open GitHub links in a new browser tab
+  document.querySelectorAll('.github-btn, .github-link').forEach(function(el) {
+    el.addEventListener('click', function(e) {
+      e.preventDefault();
+      const url = this.getAttribute('href');
+      if (url) {
+        chrome.tabs.create({ url: url });
+      }
+    });
+  });
+
   // Reload current active tab so sites re-render immediately
   reloadTabBtn.addEventListener('click', function() {
     chrome.tabs.query({ active: true, currentWindow: true }, function(tabs) {
