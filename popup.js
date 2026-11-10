@@ -151,6 +151,102 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
+  // ---- Per-site proxy (kill switch) ----
+  const proxyToggleBtn = document.getElementById('proxyToggleBtn');
+  const proxyDomains = document.getElementById('proxyDomains');
+  const proxyScheme = document.getElementById('proxyScheme');
+  const proxyHost = document.getElementById('proxyHost');
+  const proxyPort = document.getElementById('proxyPort');
+  const proxyOthers = document.getElementById('proxyOthers');
+  const proxySaveBtn = document.getElementById('proxySaveBtn');
+  const proxyStatus = document.getElementById('proxyStatus');
+
+  const PROXY_ERRORS = {
+    no_domains: 'برای فعال‌سازی، حداقل یک دامنه وارد کنید.',
+    bad_host: 'آدرس پراکسی معتبر نیست.',
+    bad_port: 'پورت باید عددی بین 1 تا 65535 باشد.'
+  };
+
+  function showProxyStatus(kind, text) {
+    proxyStatus.className = 'proxy-status ' + kind;
+    proxyStatus.textContent = text;
+  }
+
+  function fillProxyForm(cfg) {
+    proxyDomains.value = cfg.domains.join('\n');
+    proxyScheme.value = cfg.scheme;
+    proxyHost.value = cfg.host || SiteProxy.DEFAULT_CONFIG.host;
+    proxyPort.value = cfg.port || SiteProxy.DEFAULT_CONFIG.port;
+    proxyOthers.value = cfg.others;
+    proxyToggleBtn.classList.toggle('active', cfg.enabled);
+  }
+
+  // Confirms that Chrome really handed the proxy settings to this extension
+  function reportProxyControl(cfg) {
+    if (!cfg.enabled) {
+      showProxyStatus('off', 'غیرفعال است؛ تنظیمات پراکسی مرورگر دست‌نخورده می‌ماند.');
+      return;
+    }
+    chrome.proxy.settings.get({ incognito: false }, function(details) {
+      const level = details && details.levelOfControl;
+      if (level === 'controlled_by_this_extension') {
+        showProxyStatus('ok', 'فعال است: ' + cfg.domains.length + ' دامنه فقط از پراکسی ' + cfg.host + ':' + cfg.port + ' عبور می‌کنند.');
+      } else if (level === 'controlled_by_other_extensions') {
+        showProxyStatus('err', 'اعمال نشد: افزونه دیگری تنظیمات پراکسی مرورگر را در دست دارد. آن را غیرفعال کنید.');
+      } else {
+        showProxyStatus('err', 'اعمال نشد: مرورگر اجازه تغییر تنظیمات پراکسی را به این افزونه نداد.');
+      }
+    });
+  }
+
+  // Reads the form, validates it and stores it. background.js applies the stored config.
+  function saveProxy(wantEnabled) {
+    const parsed = SiteProxy.parseDomainList(proxyDomains.value);
+    if (parsed.invalid.length) {
+      showProxyStatus('err', 'دامنه نامعتبر: ' + parsed.invalid.slice(0, 3).join(' ، '));
+      return false;
+    }
+    const cfg = SiteProxy.normalizeConfig({
+      enabled: wantEnabled,
+      domains: parsed.domains,
+      scheme: proxyScheme.value,
+      host: proxyHost.value,
+      port: proxyPort.value,
+      others: proxyOthers.value
+    });
+    const error = SiteProxy.validate(cfg);
+    // An incomplete form may still be stored while the feature is off
+    if (error && (wantEnabled || error !== 'no_domains')) {
+      showProxyStatus('err', PROXY_ERRORS[error]);
+      return false;
+    }
+    const data = {};
+    data[SiteProxy.STORAGE_KEY] = cfg;
+    chrome.storage.local.set(data, function() {
+      fillProxyForm(cfg);
+      // background.js reacts to the storage change; give it a moment before checking
+      setTimeout(function() { reportProxyControl(cfg); }, 400);
+    });
+    return true;
+  }
+
+  chrome.storage.local.get([SiteProxy.STORAGE_KEY], function(data) {
+    const cfg = SiteProxy.normalizeConfig(data && data[SiteProxy.STORAGE_KEY]);
+    fillProxyForm(cfg);
+    reportProxyControl(cfg);
+  });
+
+  proxyToggleBtn.addEventListener('click', function() {
+    saveProxy(!proxyToggleBtn.classList.contains('active'));
+  });
+
+  proxySaveBtn.addEventListener('click', function() {
+    if (saveProxy(proxyToggleBtn.classList.contains('active'))) {
+      proxySaveBtn.textContent = 'ذخیره شد ✓';
+      setTimeout(function() { proxySaveBtn.textContent = 'ذخیره تنظیمات پراکسی ✓'; }, 1500);
+    }
+  });
+
   // Live Clock Updater
   setInterval(function() {
     try {
