@@ -259,12 +259,18 @@ chrome.runtime.onMessage.addListener(function(msg, sender, sendResponse) {
   // Only the extension's own pages (the popup) may ask, not content scripts running in web pages
   const fromOwnPage = sender.id === chrome.runtime.id && typeof sender.url === 'string' && sender.url.indexOf(chrome.runtime.getURL('')) === 0;
   if (!msg || !fromOwnPage) return;
+  if (msg.type === 'siteProxy:hello') {
+    sendResponse({ api: SiteProxy.API_VERSION });
+    return;
+  }
   if (msg.type === 'siteProxy:check') {
     recheck().then(sendResponse, function() { sendResponse(null); });
     return true;
   }
   if (msg.type === 'siteProxy:detect') {
-    detectVpn(msg.mode).then(sendResponse, function() { sendResponse(null); });
+    detectVpn(msg.mode).then(sendResponse, function(err) {
+      sendResponse({ error: String((err && err.message) || err) });
+    });
     return true;
   }
 });

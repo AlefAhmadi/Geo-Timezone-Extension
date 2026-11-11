@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Geo & Timezone Changer (تغییر موقعیت و زمان)",
-  "version": "1.5.0",
+  "version": "1.5.1",
   "description": "تغییر دستی موقعیت مکانی GPS، زبان محلی و منطقه زمانی سیستم برای دور زدن محدودیت‌ها و تست نرم‌افزار",
   "permissions": [
     "storage",

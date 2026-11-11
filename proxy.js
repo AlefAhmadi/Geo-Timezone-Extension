@@ -38,6 +38,11 @@ var SiteProxy = (function() {
   // PAC result keyword for each supported proxy type
   var PAC_TOKENS = { socks5: 'SOCKS5', socks4: 'SOCKS', http: 'PROXY', https: 'HTTPS' };
 
+  // Raised whenever popup.js and background.js have to change together. An unpacked extension
+  // whose files were replaced without pressing "Reload" keeps running the old background
+  // script next to the new popup; the popup compares this number to notice that.
+  var API_VERSION = 2;
+
   // A request for this host makes the PAC script report the system's current local
   // address through chrome.proxy.onProxyError (the request itself never leaves the browser).
   var PROBE_HOST = 'geo-tz-probe.invalid';
@@ -283,6 +288,7 @@ var SiteProxy = (function() {
   return {
     STORAGE_KEY: STORAGE_KEY,
     STATUS_KEY: STATUS_KEY,
+    API_VERSION: API_VERSION,
     DEFAULT_CONFIG: DEFAULT_CONFIG,
     PROBE_HOST: PROBE_HOST,
     IP_ENDPOINTS: IP_ENDPOINTS,

@@ -198,6 +198,7 @@ document.addEventListener('DOMContentLoaded', function() {
   const vpnStatus = document.getElementById('vpnStatus');
   const vpnIpText = document.getElementById('vpnIpText');
   const vpnStatusText = document.getElementById('vpnStatusText');
+  const reloadNotice = document.getElementById('reloadNotice');
 
   const PROXY_ERRORS = {
     no_domains: 'برای فعال‌سازی، حداقل یک دامنه وارد کنید.',
@@ -209,6 +210,7 @@ document.addEventListener('DOMContentLoaded', function() {
   };
 
   let proxyEnabled = false;
+  let backgroundReady = true;
   let savedProxyCfg = SiteProxy.normalizeConfig(null);
 
   // Keeps a left-to-right value (IP, host:port) in one piece inside a right-to-left sentence
@@ -292,7 +294,7 @@ document.addEventListener('DOMContentLoaded', function() {
   }
 
   function renderVpnStatus(st) {
-    if (!proxyEnabled) {
+    if (!proxyEnabled || !backgroundReady) {
       vpnStatus.className = 'vpn-status';
       return;
     }
@@ -311,8 +313,27 @@ document.addEventListener('DOMContentLoaded', function() {
     }
   }
 
+  // The kill switch is carried out by background.js. When that script does not answer, or is an
+  // older one (files replaced without reloading the extension), nothing here can work:
+  // say so instead of failing silently.
+  function showReloadNeeded() {
+    backgroundReady = false;
+    detectBtn.disabled = true;
+    proxyToggleBtn.disabled = true;
+    proxySaveBtn.disabled = true;
+    vpnStatus.className = 'vpn-status';
+    reloadNotice.className = 'proxy-status err';
+    reloadNotice.textContent = 'بخش پس‌زمینه افزونه پاسخ نمی‌دهد یا از نسخه قبلی است، برای همین Kill Switch و تشخیص خودکار کار نمی‌کنند. '
+      + 'صفحه ' + ltr('chrome://extensions') + ' را باز کنید، روی دکمه بارگذاری مجدد (⟳) این افزونه بزنید و این پنجره را دوباره باز کنید. '
+      + 'اگر پیام باقی ماند، در همان صفحه دکمه Errors این افزونه را ببینید.';
+  }
+
+  chrome.runtime.sendMessage({ type: 'siteProxy:hello' }, function(res) {
+    if (chrome.runtime.lastError || !res || res.api !== SiteProxy.API_VERSION) showReloadNeeded();
+  });
+
   function requestCheck() {
-    if (!proxyEnabled) return;
+    if (!proxyEnabled || !backgroundReady) return;
     chrome.runtime.sendMessage({ type: 'siteProxy:check' }, function(st) {
       if (chrome.runtime.lastError) return;
       if (st) renderVpnStatus(st);
@@ -381,8 +402,8 @@ document.addEventListener('DOMContentLoaded', function() {
 
   // Fills the form from what the system looks like right now. Nothing is saved until the user saves.
   function applyDetection(res) {
-    if (!res) {
-      showProxyStatus('err', 'تشخیص انجام نشد. دوباره تلاش کنید.');
+    if (!res || res.error) {
+      showProxyStatus('err', 'تشخیص با خطا متوقف شد' + (res && res.error ? ': ' + ltr(res.error) : '. دوباره تلاش کنید.'));
       return;
     }
     if (res.proxies.length && proxyMode.value !== 'tunnel') {
@@ -418,12 +439,16 @@ document.addEventListener('DOMContentLoaded', function() {
     proxySaveBtn.disabled = true;
     detectBtn.textContent = 'در حال تشخیص…';
     chrome.runtime.sendMessage({ type: 'siteProxy:detect', mode: proxyMode.value }, function(res) {
-      const failed = !!chrome.runtime.lastError;
+      detectBtn.textContent = '🔍 تشخیص خودکار';
+      // No answer at all means the background script is not there (see showReloadNeeded)
+      if (chrome.runtime.lastError) {
+        showReloadNeeded();
+        return;
+      }
       detectBtn.disabled = false;
       proxyToggleBtn.disabled = false;
       proxySaveBtn.disabled = false;
-      detectBtn.textContent = '🔍 تشخیص خودکار';
-      applyDetection(failed ? null : res);
+      applyDetection(res);
     });
   });
 
