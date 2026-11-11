@@ -151,7 +151,25 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   }
 
-  // ---- Per-site proxy (kill switch) ----
+  // ---- Advanced Options Accordion & Proxy (kill switch) ----
+  const advancedToggle = document.getElementById('advancedToggle');
+  const advancedContent = document.getElementById('advancedContent');
+  const proxyActiveBadge = document.getElementById('proxyActiveBadge');
+
+  if (advancedToggle && advancedContent) {
+    advancedToggle.addEventListener('click', function() {
+      const isHidden = advancedContent.style.display === 'none';
+      advancedContent.style.display = isHidden ? 'block' : 'none';
+      advancedToggle.classList.toggle('open', isHidden);
+    });
+  }
+
+  function updateProxyBadge(enabled) {
+    if (proxyActiveBadge) {
+      proxyActiveBadge.style.display = enabled ? 'inline-block' : 'none';
+    }
+  }
+
   const proxyToggleBtn = document.getElementById('proxyToggleBtn');
   const proxyDomains = document.getElementById('proxyDomains');
   const proxyScheme = document.getElementById('proxyScheme');
@@ -179,6 +197,7 @@ document.addEventListener('DOMContentLoaded', function() {
     proxyPort.value = cfg.port || SiteProxy.DEFAULT_CONFIG.port;
     proxyOthers.value = cfg.others;
     proxyToggleBtn.classList.toggle('active', cfg.enabled);
+    updateProxyBadge(cfg.enabled);
   }
 
   // Confirms that Chrome really handed the proxy settings to this extension
