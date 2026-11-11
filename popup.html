@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Geo & Timezone</title>
   <style>
-    @import url('https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;600&display=swap');
     * { box-sizing: border-box; margin: 0; padding: 0; font-family: 'Vazirmatn', -apple-system, sans-serif; }
     body { width: 380px; background: #f8fafc; color: #1e293b; padding: 14px; direction: rtl; }
     
@@ -45,6 +44,26 @@
     .proxy-status.off { display: block; background: #f1f5f9; color: #64748b; border: 1px solid #e2e8f0; }
     .proxy-status.err { display: block; background: #fef2f2; color: #b91c1c; border: 1px solid #fecaca; }
     input[type="number"], .font-mono { font-family: 'JetBrains Mono', monospace; direction: ltr; text-align: left; }
+
+    /* Live VPN / IP indicator */
+    .vpn-status { display: none; align-items: center; gap: 9px; margin-top: 9px; padding: 8px 10px; border-radius: 10px; background: #f8fafc; border: 1px solid #e2e8f0; }
+    .vpn-status.ok, .vpn-status.bad, .vpn-status.warn, .vpn-status.wait { display: flex; }
+    .vpn-status.ok { background: #ecfdf5; border-color: #a7f3d0; }
+    .vpn-status.bad { background: #fef2f2; border-color: #fecaca; }
+    .vpn-status.warn { background: #fffbeb; border-color: #fde68a; }
+    .vpn-dot { flex: none; width: 10px; height: 10px; border-radius: 50%; background: #94a3b8; }
+    .vpn-status.ok .vpn-dot { background: #10b981; box-shadow: 0 0 0 3px #d1fae5; }
+    .vpn-status.bad .vpn-dot { background: #ef4444; box-shadow: 0 0 0 3px #fee2e2; }
+    .vpn-status.warn .vpn-dot { background: #f59e0b; box-shadow: 0 0 0 3px #fef3c7; }
+    .vpn-status-body { min-width: 0; flex: 1; }
+    .vpn-ip-line { display: flex; align-items: center; gap: 6px; font-size: 10.5px; font-weight: 700; color: #334155; }
+    .vpn-ip { font-family: 'JetBrains Mono', monospace; font-size: 12px; direction: ltr; unicode-bidi: isolate; color: #0f172a; }
+    .vpn-status-text { font-size: 10px; line-height: 1.5; color: #475569; margin-top: 1px; }
+    .mode-row { display: grid; grid-template-columns: 1fr auto; gap: 6px; align-items: end; margin-bottom: 8px; }
+    .btn-detect { padding: 7px 10px; background: #ffffff; color: #1d4ed8; border: 1px solid #93c5fd; border-radius: 8px; font-size: 11px; font-weight: 700; cursor: pointer; white-space: nowrap; transition: background 0.15s; }
+    .btn-detect:hover { background: #eff6ff; }
+    .btn-detect:disabled { opacity: 0.6; cursor: default; }
+    .span-row { grid-column: 1 / -1; }
 
     .clock-box { background: #eff6ff; border: 1px solid #bfdbfe; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; display: flex; align-items: center; justify-content: space-between; }
     .clock-time { font-family: 'JetBrains Mono', monospace; font-size: 15px; font-weight: 700; color: #1e40af; direction: ltr; }
@@ -162,10 +181,22 @@
       </div>
     </div>
 
+    <!-- Live VPN / IP indicator (stays visible while the section is collapsed) -->
+    <div id="vpnStatus" class="vpn-status" role="status">
+      <span class="vpn-dot"></span>
+      <div class="vpn-status-body">
+        <div class="vpn-ip-line">
+          <span>IP فعلی:</span>
+          <span id="vpnIpText" class="vpn-ip">—</span>
+        </div>
+        <div id="vpnStatusText" class="vpn-status-text"></div>
+      </div>
+    </div>
+
     <div id="advancedContent" class="advanced-content" style="display: none;">
       <div class="advanced-divider"></div>
 
-      <!-- Per-site proxy (kill switch) -->
+      <!-- Per-site kill switch -->
       <div class="section-title">
         <span>🛡️ پراکسی اختصاصی سایت (Kill Switch)</span>
         <button id="proxyToggleBtn" class="toggle-btn" title="فعال / غیرفعال">
@@ -173,7 +204,7 @@
         </button>
       </div>
       <div class="proxy-hint">
-        سایت‌های این فهرست فقط از پراکسی زیر باز می‌شوند. اگر فیلترشکن قطع شود، این سایت‌ها باز نمی‌شوند و درخواستی با IP واقعی شما فرستاده نمی‌شود.
+        سایت‌های این فهرست فقط وقتی باز می‌شوند که فیلترشکن شما وصل باشد. اگر فیلترشکن قطع شود، این سایت‌ها باز نمی‌شوند و درخواستی با IP واقعی شما فرستاده نمی‌شود.
       </div>
 
       <div class="input-group">
@@ -181,35 +212,61 @@
         <textarea id="proxyDomains" class="font-mono" rows="3" spellcheck="false" placeholder="example.com"></textarea>
       </div>
 
-      <div class="proxy-row">
+      <div class="mode-row">
         <div>
-          <label class="label" for="proxyScheme">نوع پراکسی</label>
-          <select id="proxyScheme">
-            <option value="socks5">SOCKS5</option>
-            <option value="socks4">SOCKS4</option>
-            <option value="http">HTTP</option>
-            <option value="https">HTTPS</option>
+          <label class="label" for="proxyMode">نوع فیلترشکن</label>
+          <select id="proxyMode">
+            <option value="tunnel">تونل (WireGuard / OpenVPN)</option>
+            <option value="proxy">پراکسی (v2ray / Clash)</option>
           </select>
         </div>
-        <div>
-          <label class="label" for="proxyHost">آدرس (Host)</label>
-          <input type="text" id="proxyHost" class="font-mono" spellcheck="false" value="127.0.0.1">
+        <button id="detectBtn" type="button" class="btn-detect" title="فیلترشکن روشن باشد، سپس این دکمه را بزنید">🔍 تشخیص خودکار</button>
+      </div>
+
+      <!-- Proxy mode -->
+      <div id="proxyFields">
+        <div class="proxy-row">
+          <div>
+            <label class="label" for="proxyScheme">نوع پراکسی</label>
+            <select id="proxyScheme">
+              <option value="socks5">SOCKS5</option>
+              <option value="socks4">SOCKS4</option>
+              <option value="http">HTTP</option>
+              <option value="https">HTTPS</option>
+            </select>
+          </div>
+          <div>
+            <label class="label" for="proxyHost">آدرس (Host)</label>
+            <input type="text" id="proxyHost" class="font-mono" spellcheck="false" value="127.0.0.1">
+          </div>
+          <div>
+            <label class="label" for="proxyPort">پورت</label>
+            <input type="number" id="proxyPort" min="1" max="65535" step="1" value="1080">
+          </div>
         </div>
-        <div>
-          <label class="label" for="proxyPort">پورت</label>
-          <input type="number" id="proxyPort" min="1" max="65535" step="1" value="1080">
+
+        <div class="input-group">
+          <label class="label" for="proxyOthers">بقیه سایت‌ها</label>
+          <select id="proxyOthers">
+            <option value="direct">اتصال مستقیم (بدون پراکسی)</option>
+            <option value="proxy">از همین پراکسی؛ اگر قطع بود، مستقیم</option>
+          </select>
         </div>
       </div>
 
-      <div class="input-group">
-        <label class="label" for="proxyOthers">بقیه سایت‌ها</label>
-        <select id="proxyOthers">
-          <option value="direct">اتصال مستقیم (بدون پراکسی)</option>
-          <option value="proxy">از همین پراکسی؛ اگر قطع بود، مستقیم</option>
-        </select>
+      <!-- Saved VPN identity: tunnel address (tunnel mode) and public IP (both modes) -->
+      <div class="input-row">
+        <div id="tunnelAddrWrap">
+          <label class="label" for="tunnelAddr">آدرس تونل (IP داخلی)</label>
+          <input type="text" id="tunnelAddr" class="font-mono" spellcheck="false" placeholder="10.8.0.2">
+        </div>
+        <div id="vpnIpWrap">
+          <label class="label" for="vpnIp" id="vpnIpLabel">IP عمومی فیلترشکن</label>
+          <input type="text" id="vpnIp" class="font-mono" spellcheck="false" placeholder="خودکار">
+        </div>
       </div>
 
-      <button id="proxySaveBtn" class="btn-save">ذخیره تنظیمات پراکسی ✓</button>
+      <button id="proxySaveBtn" class="btn-save">ذخیره تنظیمات Kill Switch ✓</button>
       <div id="proxyStatus" class="proxy-status"></div>
     </div>
   </div>
